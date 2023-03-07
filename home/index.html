@@ -1,0 +1,38 @@
+<HTML>
+  <HEAD>
+    <TITLE>PermaServe</TITLE>
+  </HEAD>
+  <STYLE>
+    a:link { text-decoration: none; }
+    a:visited { text-decoration: none; }
+    a:hover { text-decoration: none; }
+    a:active { text-decoration: none; }
+  </STYLE>
+  <BODY>
+
+    <FONT FACE=Arial>
+    
+    <H1>PermaServe</H1>
+    
+    <P>This server is running <a href="https://github.com/fcecin/pserve">PermaServe</a>, a simple NodeJS application that reads data stored in the consensus memory (RAM) of an Antelope blockchain using the <a href="https://github.com/fcecin/pstore/">PermaStore</a> standard.</P>
+
+    <P>This installation is connected to the <a href="https://uxnetwork.io">UX Network</a> blockchain, and is using the PermaStore contract deployed to the <a href="https://explorer.uxnetwork.io/account/permastoreux">permastoreux</a> smart contract account.</P>
+
+    <H2>Instructions:</H2>
+
+    <P>To browse all cached PermaStore pages, navigate to the <a href="/">root URL</a>.</P>
+
+    <P>To browse a specific PermaStore page, navigate to the top-level directory named after that page:</P>
+
+    <P><UL><LI>Visit page named <b>example</b>: <a href="/example">/example</a></LI></UL></P>
+
+    <P>If a requested page is not already cached, PermaServe will attempt to retrieve it from the blockchain.</P>
+    
+    <P>The page cache can be explored by visiting <a href="/_pages">/_pages</a></P>
+    
+    <P>The node cache can be explored by visiting <a href="/_nodes">/_nodes</a></P>
+
+  </FONT>
+    
+  </BODY>
+</HTML>
