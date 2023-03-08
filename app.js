@@ -59,6 +59,25 @@ fs.mkdirSync("nodes", { recursive: true });
 const path = require('path')
 app.use('/', express.static(path.join(__dirname, 'pages')))
 
+// =============================================================================
+// NOTE:
+// This is a TLS (HTTPS) setup hack template that can help your webserver
+//   answer to Certbot / ACME / Let's Encrypt challenges that are made
+//   during automated TLS setup. I have used this specifically in an
+//   environment where the app server is installed in a certain directory,
+//   and I have to go back ".." and enter "public" to find the ".well-known"
+//   directory that is supposed to be served as "www.yourdomain.com/.well-known"
+//   to the external challenges. Change it to suit your needs.
+// This actual app.js server app does not include any NodeJS TLS/HTTPS support
+//   because in the environment I have published this, that support is provided
+//   by the proxy server that sits between this app server and the 'net. 
+// =============================================================================
+//app.get('/.well-known(/*)', function (req, res) {
+//      var mypath = path.join(__dirname, '../public/.well-known/');
+//      res.sendFile(req.params[0], { root: mypath });
+//});
+// =============================================================================
+
 // /_home serves the static home dir
 app.use('/_home', express.static(path.join(__dirname, 'home')))
 
