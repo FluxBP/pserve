@@ -49,6 +49,10 @@ const rpc = new JsonRpc(ANTELOPE_API_NODE, { fetch });
 const fromHexString = (hexString) =>
   Uint8Array.from(hexString.match(/.{1,2}/g).map((byte) => parseInt(byte, 16)));
 
+// Make sure data directories exist (not sure this is actually needed)
+fs.mkdirSync("pages", { recursive: true });
+fs.mkdirSync("nodes", { recursive: true });
+
 // Webserver routing
 
 // Root dir browses (views) the blockchain node cache
