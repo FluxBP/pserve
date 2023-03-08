@@ -1,0 +1,697 @@
+#!/usr/bin/perl
+
+# ======================================================
+#
+# This is a command-line tool that downloads and uploads
+#   data for PermaServe and PermaStore.
+# It requires cleos (https://antelope.io) to work.
+#
+# For more information:
+#   PermaServe: https://github.com/fcecin/pserve
+#   PermaStore: https://github.com/fcecin/pstore
+#
+# ======================================================
+
+use strict;
+use warnings;
+use File::Basename;
+use File::Path;
+
+# ======================================================
+# Configs & defaults
+# ======================================================
+
+my $UPLOAD_SPLIT_BYTE_SIZE = 64000;
+
+my $workdir = $ENV{"HOME"} . '/storeos/'; 
+mkdir $workdir;
+swd($workdir);
+
+# Default local file pointer
+my $lfp          = $workdir . "default";
+my $lfp_filename = "default"; # filename of lfp without path
+sel($lfp);
+
+# Default account and permission string for cleos -p
+# There's no way for us to guess this, so set it to garbage
+my $accperm      = "ACCOUNT_PERMISSION_NOT_SET";
+my $acconly      = $accperm; # account only, without e.g. "@active"
+
+# Default blockchain API node
+my $apiurl       = "https://api.uxnetwork.io";
+api($apiurl);
+
+# Default PermaStore contract
+my $permastorecontract = "permastoreux";
+contract($permastorecontract);
+
+# Default remote PermaStore file name
+# This can't be guessed, so set it to garbage
+my $remotefn           = "REMOTE_PERMASTORE_FILENAME_NOT_SET";
+
+# Default retrieved file metadata
+my $meta_owner;
+my $meta_top;
+my $meta_published;
+
+# ======================================================
+# Helper functions
+# ======================================================
+
+sub sys {
+    system(shift);
+    if ($? == -1) {
+	print "ERROR: Failed to execute tool: $!\n";
+    }
+    elsif ($? & 127) {
+	printf "ERROR: Tool died with signal %d, %s coredump\n",
+	    ($? & 127),  ($? & 128) ? 'with' : 'without';
+    }
+    else {
+	my $retval = $? >> 8;
+	if ($retval == 0) {
+	    return;
+	}
+	printf "ERROR: Tool exited with value %d\n", $retval;
+    }
+    exit;
+}
+
+sub get_extension {
+    if (! @_) {
+	print "ERROR: get_extension\n";
+	exit;
+    }
+    my $arg = shift;
+    my ($name, $path, $suffix) = fileparse($arg, '\.[^\.]*');
+    return $suffix;
+}
+
+sub get_filename_without_extension {
+    if (! @_) {
+	print "ERROR: get_extension\n";
+	exit;
+    }
+    my $arg = shift;
+    my ($name, $path, $suffix) = fileparse($arg, '\.[^\.]*');
+    return $name;
+}
+
+sub get_path {
+    if (! @_) {
+	print "ERROR: get_extension\n";
+	exit;
+    }
+    my $arg = shift;
+    my ($name, $path, $suffix) = fileparse($arg, '\.[^\.]*');
+    return $path;
+}
+
+sub validate_account_name {
+    if (! @_) {
+	print "ERROR: validate_account_name\n";
+	exit;
+    }
+    my $acn = shift;
+    if (length($acn) < 1 || length($acn) > 12) {
+	print "ERROR: Antelope account names must have between 1 and 12 characters. This is invalid: " . $acn . "\n";
+	# FIXME/TODO: apply stricter account name validation
+	exit;
+    }
+}
+
+# ======================================================
+# Main loop
+# ======================================================
+
+my $ARGC = 1 + $#ARGV;
+
+if ($ARGC == 0) {
+    help();
+}
+
+for (my $i = 0; $i < $ARGC; $i++) {
+    my $arg = shift @ARGV;
+    print 'Running command: "' . $arg . '"' . "\n";
+    eval $arg;
+    if ($@ ne '') {
+	print "----\n";
+	print "Command error:\n";
+	print $@;
+	print "----\n";
+        exit;
+    }
+}
+
+# ======================================================
+# Help
+# ======================================================
+
+sub help {
+print "Storeos v1.0.0\n";
+print "\n";
+print "Storeos is a command-line utility that downloads and uploads files\n";
+print "    from/to a PermaStore contract on an Antelope chain using cleos.\n";
+print "\n";
+print "Storeos is a Perl script that interprets every command-line argument\n";
+print "    as a Perl statement inside itself. Thus, everything that can be\n";
+print "    done via the the command-line, can be done by editing the script.\n";
+print "    To avoid shell parse errors use single quotes to enclose commands\n";
+print "Example (print this error message and quit):\n";
+print "    storeos 'help()'\n";
+print "\n";
+print "Easy functions:\n";
+print "    websiteupload(perm, remote, input)\n";
+print "        Uploads given input (file or directory) to the given remote\n";
+print "        PermaStore file name, assuming it has to be viewable as a\n";
+print "        PermaServe website. perm is your local cleos account and\n";
+print "        permission for cleos -p (e.g. 'myaccountnam').\n";
+print "    websitedownload(remote, output)\n";
+print "        Downloads given remote PermaStore file name and unpacks it at\n";
+print "        the given output directory, assuming it is formatted as a\n";
+print "        PermaServe website, e.g. was uploaded with websiteupload().\n";
+print "    websitechunk(size)\n";
+print "        Call before websiteupload() to set upload part byte size.\n";
+print "        Default: " . $UPLOAD_SPLIT_BYTE_SIZE . ".\n";
+print "\n";
+print "Low-level functions:\n";
+print "    swd()\n";
+print "        Set the work directory (default: \"" . $workdir . "\").\n";
+print "    wipewd()\n";
+print "        Clear the work directory.\n";
+print "    sel(n)\n";
+print "        Select file or directory (by name 'n')\n";
+print "    cbr()\n";
+print "        Brotli compress selection. Resulting file is selected.\n";
+print "    ctar()\n";
+print "        Tar pack selection. If it is a directory, it is stripped\n";
+print "        from the packed files' path. Resulting file is selected.\n";
+print "    fsplit(b)\n";
+print "        Split selection (must be one file) at b bytes. SPLIT_ plus\n";
+print "        Selection becomes the prefix of the output split file, and\n";
+print "        a dotted split piece number becomes the suffix. The prefix\n";
+print "        is selected.\n";
+print "    dbr()\n";
+print "        Brotli decompress selection. Resulting file is selected.\n";
+print "    dtar()\n";
+print "        Tar decompress selection into new temporary 'DTAR' directory\n";
+print "        under the work directory. Then selects the DTAR directory.\n";
+print "    fjoin()\n";
+print "        Join all files with a name prefix equal to the selection,\n";
+print "        and a dotted numeric suffix (.0, .1, .2, ...) for the part\n";
+print "        number. Resulting file is selected.\n";
+print "    cp(spec)\n";
+print "        Copy selected file or directory to spec, then selects spec.\n";
+print "    me(accperm)\n";
+print "        Sets the local cleos account and permission.";
+print "    api(url)\n";
+print "        Set Antelope blockchain API node URL to url.\n";
+print "        Default: \"" . $apiurl. "\".\n";
+print "    contract(n)\n";
+print "        Set PermaStore contract name to n.\n";
+print "        Default: \"" . $permastorecontract. "\".\n";
+print "    unlock(p)\n";
+print "        Unlock cleos with password p.\n";
+print "    r(n)\n";
+print "        Select remote (PermaStore) file name.\n";
+print "    create()\n";
+print "        Create selected remote file.\n";
+print "    getmeta()\n";
+print "        Get selected remote file metadata and save it to selected\n";
+print "        remote file name plus '.meta'.\n";
+print "    pub()\n";
+print "        Publish selected remote file.\n";
+print "    unpub()\n";
+print "        Unpublish selected remote file.\n";
+print "    setimmutable()\n";
+print "        Set selected remote file to immutable (cannot be reversed).\n";
+print "    setnode(i)\n";
+print "        Upload selected file plus 'i' to node# i of selected remote\n";
+print "        file.\n"; 
+print "    getnode(i)\n";
+print "        Download node# i of selected remote file plus 'i' to selected\n";
+print "        file.\n";
+print "    delnode()\n";
+print "        Delete last node of selected remote file.\n";
+print "    reset()\n";
+print "        Delete all nodes of the selected remote file.\n";
+print "    delfile()\n";
+print "        Delete selected remote file.\n";
+exit;
+}
+
+# ======================================================
+# High-level functions
+# ======================================================
+
+sub websiteupload {
+   if (! @_) { print "ERROR: Expected account name.\n"; exit; }
+   me(shift);
+   if (! @_) { print "ERROR: Expected remote file (page) name.\n"; exit; }
+   r(shift);
+   if (! @_) { print "ERROR: Expected input filename (file or directory).\n"; exit; }
+   my $input = shift;
+   if (!-e $input) {
+       print "ERROR: Input file or directory not found: " . $input . "\n";
+       exit;
+   }
+   sel($input);
+   
+   # Must wipe work directory to avoid finding a wrong number of split parts.
+   # The alternative would be to have fsplit tell how many splits it generated.
+   wipewd();
+
+   print "Will pack local data source '" . $lfp . "' as a PermaServe website and upload it to remote PermaStore file '" . $remotefn . "'...\n";
+
+   getmeta();
+
+   if (defined $meta_owner) {
+       print "Page \"" . $remotefn. "\" metadata:\n";
+       print "- owner:     " . $meta_owner . "\n";
+       print "- top:       " . $meta_top . "\n";
+       print "- published: " . $meta_published . "\n";
+
+       if ($meta_top > 0) {
+	   # There already is data on the page. This is unsupported.
+	   print "ERROR: Remote PermaStore file already has data nodes in it (top > 0); refusing to overwrite it. Use 'reset()' or 'delfile()' first.\n";
+	   exit;
+       } else {
+	   # There is no data on the page.
+	   # This is OK, we can upload data to an empty file.
+       }
+       
+       if ($meta_owner ne $acconly) {
+	   print "WARNING: Remote file owner \"$meta_owner\" does not match local account \"$acconly\".\n";
+       }
+       
+   } else {
+       # Page does not exist. Must create it first.
+       create();
+   }
+
+   ctar();
+   cbr();
+   fsplit($UPLOAD_SPLIT_BYTE_SIZE);
+
+   my $upfn;
+   my $found;
+   my $upload_prefix = $lfp;
+   my $nodeid = 0;
+   do {
+       $upfn = $upload_prefix . '.' . $nodeid;
+       $found = (-f $upfn);
+       if ($found) {
+	   sel($upfn);
+	   setnode($nodeid);
+       }
+       $nodeid ++;
+   } while ($found);
+
+   print "Finished upload (input was split in " . $nodeid . " parts).\n";
+}
+
+sub websitedownload {
+   if (! @_) { print "ERROR: Expected remote file (page) name.\n"; exit; }
+   r(shift);
+   if (! @_) { print "ERROR: Expected output directory.\n"; exit; }
+   my $download_dir = shift;
+   if (!-d $download_dir && !mkdir $download_dir) {
+       print "ERROR: Cannot create directory: " . $download_dir . "\n";
+       exit;
+   }
+
+   # Just because. Why not?
+   wipewd();
+
+   print "Will try to download PermaStore file '" . $remotefn . "', treat it as a PermaServe website and unpack it to output directory '" . $download_dir . "'...\n";
+
+   getmeta();
+
+   print "Page \"" . $remotefn. "\" metadata:\n";
+   print "- owner:     " . $meta_owner . "\n";
+   print "- top:       " . $meta_top . "\n";
+   print "- published: " . $meta_published . "\n";
+
+   my $downloadprefix = "DOWNLOAD_SPLIT_$remotefn";
+   for (my $i = 0; $i < $meta_top; $i++) {
+       sel($downloadprefix . '.' . $i);
+       getnode($i);
+   }
+   sel($downloadprefix);
+   fjoin();
+   dbr();
+   dtar();
+   cp($download_dir);
+
+   print "Finished download.\n";
+}
+
+sub websitechunk {
+   if (! @_) {
+	print "ERROR: Must specify chunk size.\n";
+	exit;
+   }
+   $UPLOAD_SPLIT_BYTE_SIZE = shift;
+   my $min = 1024;
+   my $max = 1024 * 1024;
+   if ($UPLOAD_SPLIT_BYTE_SIZE < $min) {
+       print "ERROR: Byte size must be at least $min bytes.\n";
+       exit;
+   }
+   if ($UPLOAD_SPLIT_BYTE_SIZE > $max) {
+       print "ERROR: Byte size must be at most $max bytes.\n";
+       exit;
+   }
+   print "Set upload split byte size to $UPLOAD_SPLIT_BYTE_SIZE bytes.\n";
+}
+
+# ======================================================
+# Low-level functions
+# ======================================================
+
+sub swd {
+   if (! @_) {
+	print "ERROR: Specific working directory to set.\n";
+	exit;
+   }
+   my $candidate = shift;
+   if (! -d $candidate) {
+       print "ERROR: Directory \"" . $candidate . "\" does not exist.\n";
+       exit;
+   }
+   $workdir = $candidate;
+   print "Set work directory to: " . $workdir . "\n";
+}
+
+sub wipewd {
+    print "Removing work directory: " . $workdir . "\n";
+    rmtree($workdir);
+    print "Recreating work directory: " . $workdir . "\n";
+    mkdir $workdir;
+}
+
+sub sel {
+    if (! @_) {
+	print "ERROR: No file to select.\n";
+	exit;
+    }
+    $lfp = shift;
+    my ($filename, $directory) = fileparse($lfp);
+    $lfp_filename = $filename;
+    my $stat;
+    if (-e $lfp) {
+	$stat = "(exists, size: " . (-s $lfp) . ")";
+    } else {
+	$stat = "(does not exist)";
+    }
+    print "Selected local file: '" . $lfp . "' " . $stat . "\n";
+}
+
+sub cbr {
+    print "Brotli compressing \"$lfp\"...\n";
+    my $outfile = $workdir . $lfp_filename . ".br";
+    sys("brotli $lfp -f -o " . $outfile);
+    sel($outfile);
+}
+
+sub ctar {
+    print "Tar packing \"$lfp\"...\n";
+    # Guess the best tar file name 
+    my $outfile;
+    if ($lfp_filename eq '.' || $lfp_filename eq '..') {
+	# avoid naming the tar file '..tar' or '...tar'
+	$outfile = $workdir . 'DIRECTORY' . ".tar";
+	print "Changed output file name to \"" . $outfile . "\"\n";
+    } else {
+	$outfile = $workdir . $lfp_filename . ".tar";
+    }
+    # run tar differently depending on whether it's a file or a directory input
+    if (-d $lfp) {
+	# If target is a directory, change into it and pack from there (.)
+	#    to strip it from the packed files' path inside the tar file.
+	sys("cd $lfp; tar cvf $outfile . --blocking-factor=1");
+    } else {
+	# If target is a file, change into the directory that the file is in
+	#    and then specifically pack the filename. This strips the
+	#    path to the file from the tarfile.
+	my $inputpath = get_path( $lfp );
+	sys("cd $inputpath; tar cvf $outfile $lfp_filename --blocking-factor=1");
+    }
+    sel($outfile);
+}
+
+sub fsplit {
+    if (! @_) {
+	print "ERROR: Must specify split byte count.\n";
+	exit;
+    }
+    my $bytesize = shift;
+    if ($bytesize < 1 || $bytesize > 1000000) {
+	print "ERROR: Invalid split byte size: " + $bytesize + "\n";
+	exit;
+    }
+    print 'Splitting "' . $lfp . '" at ' . $bytesize . " bytes chunks...\n";
+    my $outprefix = $workdir . 'SPLIT_' . $lfp_filename;
+    my $dotted_outprefix = $outprefix . '.';
+    sys("split --bytes=$bytesize -d --suffix-length=1 $lfp $dotted_outprefix");
+    print "Selection below is expected to not exist (it's the split prefix):\n";
+    sel($outprefix);
+}
+
+sub dbr {
+    print "Brotli decompressing \"$lfp\"...\n";
+    my $outfile = $workdir . $lfp_filename;
+    my $ext = get_extension( $outfile );
+    if ($ext eq '.br') {
+	my $path = get_path( $outfile );
+	my $fnwe = get_filename_without_extension( $outfile );
+	$outfile = $path . $fnwe;
+    } else {
+	$outfile = $outfile . '.DECOMPRESSED';
+    }
+    sys("brotli $lfp -d -f -o " . $outfile);
+    sel($outfile);
+}
+
+sub dtar {
+    my $outdir = $workdir . 'DTAR/';
+    print "Wiping tar unpacking work directory: \"$outdir\"...\n";
+    rmtree($outdir);
+    mkdir $outdir;
+    print "Tar unpacking \"$lfp\" to work directory...\n";
+    sys("tar xvf $lfp --directory=$outdir");
+    sel($outdir);
+}
+
+sub fjoin {
+    print "Joining all part files with \"$lfp\" prefix (.0, .1, .2, etc.)...\n";
+    my $outfile = $workdir . 'JOIN_' . $lfp_filename;
+    print "Destination file: \"" . $outfile . "\"\n";
+    unlink($outfile);
+    my $chunki  = 0;
+    my $chunkfn = $lfp . '.' . $chunki; 
+    while (-e $chunkfn) {
+	sys("cat $chunkfn >> $outfile");
+	$chunki++;
+	$chunkfn = $lfp . '.' . $chunki; 
+    }
+    print "Joined " . $chunki . " parts\n";
+    sel($outfile);
+}
+
+sub cp {
+    if (! @_) {
+	print "ERROR: Must specify copy destination.\n";
+	exit;
+    }
+    my $towhere = shift;
+    my $fromwhere = $lfp;
+    if (-d $fromwhere) {
+	# if source is a directory name, append /* to it
+	$fromwhere =~ s|/*$|/|;
+	$fromwhere = $fromwhere . "*";
+	print "Detected that copy source is a directory. Using source filespec instead: " . $fromwhere . "\n";
+    }
+    print "Copying \"$fromwhere\" to \"$towhere\"...\n";
+    my $result = `cp -r $fromwhere $towhere`;
+    if ($result ne '') {
+	print "ERROR: cp failed: \"$result\"\n";
+	exit;
+    }
+}
+
+sub me {
+    if (! @_) {
+	print "ERROR: Must specify an account permission.\n";
+	exit;
+    }
+    $accperm = shift;
+    print "Setting local cleos account and permission to: " . $accperm . "\n";
+    $acconly = $accperm;
+    $acconly =~ s/\@.*//;
+    validate_account_name($acconly);
+}
+
+sub api {
+    if (! @_) {
+	print "ERROR: Must specify an Antelope API node URL.\n";
+	exit;
+    }
+    $apiurl = shift;
+    print "Set Antelope API node URL to: " . $apiurl . "\n"; 
+}
+
+sub contract {
+    if (! @_) {
+	print "ERROR: Must specify a PermaStore contract account.\n";
+	exit;
+    }
+    my $c = shift;
+    validate_account_name($c);
+    $permastorecontract = $c;
+    print "Set PermaStore contract account to: " . $permastorecontract . "\n";
+}
+
+sub unlock {
+    print "Unlocking cleos wallet with given password (will lock first to avoid errors)...\n";
+    if (! @_) {
+	print "ERROR: Must specify cleos password.\n";
+	exit;
+    }
+    my $pw = shift;
+    sys("cleos wallet lock");
+    sys("cleos wallet unlock --password $pw");
+}
+
+sub r {
+    if (! @_) {
+	print "ERROR: Must specify a PermaStore remote file name.\n";
+	exit;
+    }
+    my $c = shift;
+    validate_account_name($c);
+    $remotefn = $c;
+    print "Set remote PermaStore file name to: " . $remotefn . "\n"; 
+}
+
+sub create {
+    print "Account \"" . $acconly.  "\" creating remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract create '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\"}' -p $accperm";
+    sys($cmd);
+}
+
+sub getmeta {
+    my $metaoutfile = $workdir . $remotefn . '.meta';
+    print "Fetching metadata for remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl get table $permastorecontract $remotefn files";
+    my $result = `$cmd`;
+    my $result_copy = $result;
+    ($meta_owner) = $result =~ /\"owner\"\s*:\s*\"([[:alnum:]]+)\"/g;
+    ($meta_top) = $result =~ /\"top\"\s*:\s*(\d+)/g;
+    ($meta_published) = $result =~ /\"published\"\s*:\s*(\d+)/g;
+    if (!defined $meta_owner || !defined $meta_top || !defined $meta_published) {
+	print "INFO: Remote file not found.\n";
+	undef $meta_owner;
+	undef $meta_top;
+	undef $meta_published;
+    } else {
+	my $result = `echo "$result_copy" > $metaoutfile`;
+	if ($result eq '') {
+	    print "Wrote metadata to \"" . $metaoutfile .  "\"\n";
+	} else {
+	    print "Error writing metadata to \"" . $metaoutfile .  "\": $result\n";
+	}
+    }
+}
+
+sub pub {
+    print "Account \"" . $acconly.  "\" publishing remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract setpub '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\", \"ispub\":\"1\"}' -p $accperm";
+    sys($cmd);
+}
+
+sub unpub {
+    print "Account \"" . $acconly.  "\" un-publishing remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract setpub '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\", \"ispub\":\"0\"}' -p $accperm";
+    sys($cmd);
+}
+
+sub setimmutable {
+    print "Account \"" . $acconly.  "\" setting to immutable remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract setimmutable '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\"}' -p $accperm";
+    sys($cmd);
+}
+sub setnode {
+    if (! @_) {
+	print "ERROR: Must specify a node id.\n";
+	exit;
+    }
+    my $nodeid = shift;
+    if ($nodeid < 0 || $nodeid > 1024) {
+	print "ERROR: Invalid node id " + $nodeid + "\n";
+	exit;
+    }
+    print "Account \"" . $acconly.  "\" uploading file \"" . $lfp . "\" to data node " . $nodeid . " of remote file \"" . $remotefn . "\"...\n";
+
+    # Nonexisting and zero-sized node files are invalid for upload
+    if (! -e $lfp) {
+	print "ERROR: Selected file \"" . $lfp . "\" does not exist.\n";
+	exit;
+    }
+    if (-s $lfp == 0) {
+	print "ERROR: Selected file \"" . $lfp . "\" is empty.\n";
+	exit;
+    }
+
+    my $nodehexdata = `xxd -p -c 9999999 $lfp`;
+    chomp $nodehexdata;
+
+    if (! $nodehexdata =~ /\A[[:xdigit:]]+\z/i) {
+	print "ERROR: Cannot read node data file: " . $nodehexdata . "\n"; 
+	exit;
+    }
+
+    my $cmd = "cleos --url $apiurl push action $permastorecontract setnode '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\", \"nodeid\":\"$nodeid\", \"nodedata\":\"$nodehexdata\"}' -p $accperm";
+    sys($cmd);
+}
+
+sub getnode {
+    if (! @_) {
+	print "ERROR: Must specify a node id.\n";
+	exit;
+    }
+    my $nodeid = shift;
+    if ($nodeid < 0 || $nodeid > 1024) {
+	print "ERROR: Invalid node id " + $nodeid + "\n";
+	exit;
+    }
+    print "Downloading file \"" . $lfp . "\" from data node " . $nodeid . " of remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl get table $permastorecontract $remotefn nodes -L $nodeid -U $nodeid";
+    my $result = `$cmd`;
+    # Match and extract "data": "deadbeefbabab11232"
+    my ($hexdata) = $result =~ /\"data\"\s*:\s*\"([[:xdigit:]]+)\"/g;
+    if (!(defined $hexdata)) {
+	print "ERROR: Did not fetch valid node data (non-existent node?)\n";
+	exit;
+    }
+    # convert hex string to bytes and save it to the destination file
+    `echo "$hexdata" | xxd -r -p > $lfp`;
+}
+
+sub delnode {
+    print "Account \"" . $acconly.  "\" deleting topmost data node from remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract delnode '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\"}' -p $accperm";
+    sys($cmd);
+}
+
+sub reset {
+    print "Account \"" . $acconly.  "\" resetting remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract reset '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\"}' -p $accperm";
+    sys($cmd);
+}
+
+sub delfile {
+    print "Account \"" . $acconly.  "\" deleting remote file \"" . $remotefn . "\"...\n";
+    my $cmd = "cleos --url $apiurl push action $permastorecontract del '{\"owner\":\"$acconly\", \"filename\":\"$remotefn\"}' -p $accperm";
+    sys($cmd);
+}
