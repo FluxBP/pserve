@@ -66,7 +66,7 @@ function info(pagename, big, m1, m2, retrysecs) {
     if (pagename.length > 0) {
 	hpage += "Page: <B>" + pagename + "</B> | ";
     }
-    var hend = `<a href="/_home">Home</a> | <a href="/">Browse</a><BR><BR></DIV></center>`;
+    var hend = `<a href="/">Browse</a> | <a href="/_home">Home</a><BR><BR></DIV></center>`;
     var hretry = "";
     var hscript = "";
     if (retrysecs > 0) {
