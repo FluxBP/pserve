@@ -308,6 +308,8 @@ sub websiteupload {
    } while ($found);
 
    print "Finished upload (input was split in " . $nodeid . " parts).\n";
+
+   pub();
 }
 
 sub websitedownload {
