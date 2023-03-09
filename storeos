@@ -327,6 +327,11 @@ sub websitedownload {
 
    getmeta();
 
+   if (!defined $meta_owner) {
+       print "ERROR: Cannot download page: remote PermaStore file \"" . $remotefn. "\" does not exist.\n";
+       exit;
+   }
+
    print "Page \"" . $remotefn. "\" metadata:\n";
    print "- owner:     " . $meta_owner . "\n";
    print "- top:       " . $meta_top . "\n";
