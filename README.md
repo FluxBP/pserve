@@ -1,4 +1,5 @@
-# pserve
+# PermaServe
+
 PermaServe is a Node application that retrieves, unpacks and serves content from an Antelope blockchain using [PermaStore](https://github.com/fcecin/pstore).
 
 PermaServe can serve static websites that are stored as Brotli-compressed tar archives on a PermaStore contract. It cannot deal with any other kind of binary PermaStore file.
@@ -23,3 +24,9 @@ The example below uses the `myaccountnam` blockchain account to upload the entir
 ```
 storeos 'websiteupload("myaccountnam", "pagename", "mylocal/directory");'
 ```
+
+## Capybara
+
+![Capybara](/favicon.ico "Caybara icon by Icons8.com")
+
+[Capybara](https://icons8.com/icon/uoOWMrUsQgHs/capybara) icon by [Icons8](https://icons8.com)
