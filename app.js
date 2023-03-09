@@ -53,6 +53,29 @@ const fromHexString = (hexString) =>
 fs.mkdirSync("pages", { recursive: true });
 fs.mkdirSync("nodes", { recursive: true });
 
+// Generate info HTML pages
+function info(pagename, big, m1, m2, retrysecs) {
+    var hstart = `<tt><body bgcolor=#DDD><center><div align=center style="background-color:EEE;border:8px dashed pink;padding:1%;margin:100px;width:640px">`;
+    var hbig = "<h2>" + big + "</h2>";
+    var h1 = m1;
+    var h2 = "";
+    if (m2.length > 0) {
+	h2 = "<BR><BR>" + m2;
+    }
+    var hpage = "<BR><BR>";
+    if (pagename.length > 0) {
+	hpage += "Page: <B>" + pagename + "</B> | ";
+    }
+    var hend = `<a href="/_home">Home</a> | <a href="/">Browse</a><BR><BR></DIV></center>`;
+    var hretry = "";
+    var hscript = "";
+    if (retrysecs > 0) {
+	hretry = "<BR><BR><a href=\"\">Try again</a> <font id=\"l\">in " + retrysecs + "s</font>";
+	hscript = "<script>var s=" + retrysecs + ";var x=setInterval(function(){if(--s>0){t=\"in \"+s+\"s\";}else{t=\"\";clearInterval(x);}document.getElementById(\"l\").innerHTML=t;},1000);</script>";
+    }
+    return hscript + hstart + hbig + h1 + h2 + hretry + hpage + hend;
+}
+
 // Webserver routing
 
 // Root dir browses (views) the blockchain node cache
@@ -132,10 +155,6 @@ app.use('/', serveIndex(path.join(__dirname, 'pages'),
 			}
 ));
 
-app.listen(WEB_SERVER_PORT, function () {
-    console.log('PermaServe running.');
-});
-
 // Dynamic routes (also exceptions that will shadow nodes):
 
 // Accessing a root entry that isn't satisfied by the static router.
@@ -162,8 +181,20 @@ app.get('/:pagename', function (req, res) {
     if (s != null) {
 	res.send(s);
     } else {
-	res.send("Null.");
+	res.send("Internal error.");
     }
+});
+
+// Default route: we don't have it
+
+app.get("*", function (req, res) {
+    res.status(404).send( info("", "404", "Not found", "<B>"+req.params[0]+"</B>", 0) );
+});
+
+// Start
+
+app.listen(WEB_SERVER_PORT, function () {
+    console.log('PermaServe running.');
 });
 
 // This takes care of retrieving and caching binary nodes from chain RAM.
@@ -253,9 +284,10 @@ function serve_permastore_page  (req, res) {
     // sanitize pagename
     var pagename = req.params.pagename;
     if (pagename.length > 12) {
-	return "Invalid page name (too long): " + pagename;
+	//return "Invalid page name (too long): " + pagename;
+	return info("", "Invalid page name", "Valid page names have at most 12 characters", "", 0);
     }
-    
+
     // we will only create a node dir for the pagename if the pagename (filename) exists
     var pageNodeDir = 'nodes/' + pagename + '/';
     var pageDirExists = fs.existsSync(pageNodeDir);
@@ -271,28 +303,36 @@ function serve_permastore_page  (req, res) {
     if (pageDirExists && fs.existsSync(pageMetaFile)) {
 	// if file is too old (1 hour), delete it, then request new metadata, end
 	var stats = fs.statSync(pageMetaFile);
-	if (new Date() - stats.mtime >= 3600000) {
+	var timediffms = new Date() - stats.mtime;
+	const timehourms = 3600000;
+	if (timediffms >= timehourms) {
 	    fs.unlinkSync(pageMetaFile);
 	    request_metadata = true;
 	} else {
+	    // Time left to metadata file refresh
+	    var tleftsecs = ~~ ((timehourms - timediffms) / 1000);
 	    // check if published. if not published, complain page not published, try again when metadata is old, end
 	    var ms = fs.readFileSync(pageMetaFile, {encoding:'utf8', flag:'r'});
 	    if (ms.includes('"published":0')) {
-		return "Page is not published. Get it published and try again in an hour.";
+		//return "Page is not published. Get it published and try again in an hour.";
+		return info(pagename, "Page is not published", "Make sure it is published and check back later", "", tleftsecs);
 	    } else if (ms.includes('"published":1')) {
 		// Published page. Keep going.
 		// Read the top:### result from the metadata, which should be there. 
 		var matchResult = ms.match(/"top":(\d+)/);
 		if (matchResult == null || matchResult.length < 2) {
-		    return "ERROR: Broken page metadata file.";
+		    //return "ERROR: Broken page metadata file.";
+		    return info(pagename, "Broken page metadata file", "Check back later", "", tleftsecs);
 		}
 		fileNodeTopVal = matchResult[1];
 		if (fileNodeTopVal - 1 > NODE_RANGE_LIMIT) {
-		    return "Ignoring page with too many data nodes: " + fileNodeTopVal + " (limit: " + NODE_RANGE_LIMIT + ").";
+		    //return "Ignoring page with too many data nodes: " + fileNodeTopVal + " (limit: " + NODE_RANGE_LIMIT + ").";
+		    return info(pagename, "Page is too large", "Node count: " + fileNodeTopVal + " | Limit: " + NODE_RANGE_LIMIT, "", 0);
 		}
 	    } else {
 		// Nonexistent page (deleted within the 1-hour window; corner case).
-		return "Page '" + pagename + "' not found (probably deleted).";
+		//return "Page '" + pagename + "' not found (probably deleted).";
+		return info(pagename, "Page not found", "This page was likely deleted", "", 0);
 	    }
 	}
     } else {
@@ -341,7 +381,8 @@ function serve_permastore_page  (req, res) {
 	    }
 	})();
 
-    	return "Requesting page metadata for page '" + pagename + "'. If it exists, try again in a minute.";
+    	//return "Requesting page metadata for page '" + pagename + "'. If it exists, try again in a minute.";
+	return info(pagename, "Searching for page on blockchain...", "Requested page metadata", "If it exists, check back later", 60);
     }
 
     // Loop through check_node from 0 to metadata.top-1
@@ -356,7 +397,8 @@ function serve_permastore_page  (req, res) {
 	}
     }
     if (requested > 0) {
-	return "Downloading page '" + pagename + "' chunks (requested: " + requested + ", already got: " + found + "). Try again in a few minutes.";
+	//return "Downloading page '" + pagename + "' chunks (requested: " + requested + ", already got: " + found + "). Try again in a few minutes.";
+	return info(pagename, "Downloading page from blockchain...", "Data nodes requested: " + requested + ", had " + found + "/" + fileNodeTopVal, "Please check back later", 30 + requested * 3);
     }
 
     // We already have all the data nodes of a (hopefully) published page.
@@ -393,9 +435,11 @@ function serve_permastore_page  (req, res) {
 	    ;
 
     } catch (err) {
+	// I don't think this ever happens
 	logError(pageDir, err);
 	return "Error processing downloaded page: " + err;
     }
 
-    return "Downloaded page '"+ pagename +"' from the blockchain and attempted to unpack it. Reload this page to view the result.";
+    //return "Downloaded page '"+ pagename +"' from the blockchain and attempted to unpack it. Reload this page to view the result.";
+    return info(pagename, "Processing page...", "Decompressing " + fileNodeTopVal + " donwloaded page data nodes", "Please check back later", 30 + fileNodeTopVal * 3);
 }
