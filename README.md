@@ -27,7 +27,7 @@ storeos 'websiteupload("myaccountnam", "pagename", "mylocal/directory");'
 
 ## Connecting PermaServe to other Antelope blockchains
 
-The default PermaServe implementation points to the PermaStore contract [permastoreux](https://explorer.uxnetwork.io/account/permastoreux) on the [UX Network](https://uxnetwork.io), and uses the blockchain API node https://api.uxnetwork.io. If you are going to use another blockchain and/or another PermaStore contract deployment, you have to edit pretty much all of the source files. Search for `permastoreux` and `api.uxnetwork.io` across the project and change them to what you need.
+The default PermaServe implementation points to the PermaStore contract [permastoreux](https://explorer.uxnetwork.io/account/permastoreux) on the [UX Network](https://uxnetwork.io), and uses the blockchain API node https://api.uxnetwork.io. If you are going to use another blockchain and/or another PermaStore contract deployment, you have to edit pretty much all of the source files. Search for `permastoreux`, `api.uxnetwork.io`, and `UX Network` across the project and change them to what you need.
 
 ## Capybara
 
