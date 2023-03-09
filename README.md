@@ -41,6 +41,7 @@ This is the V2 of the concept[^1]. Wish list for future versions:
 * Better caching
 * Easy deploy on clouds
 * storeos download/upload commands that know how to resume broken operations
+* File/page hierarchy (/page/subpage/subsubpage/...) to allow expansion & updates
 * Web3 login allows you to manage your own pages
 * Support multiple/all Antelope chains out-of-the-box
 * Detect new content on chain and download automaticaly
@@ -51,7 +52,7 @@ This is the V2 of the concept[^1]. Wish list for future versions:
 * IFPS or auxiliary P2P network storage for data (pay via blockchain)
 * Charge for caching, serving and/or viewing pages (pay via blockchain)
 * Dynamic pages, web applications, back-ends
-* Download, upload, create, edit, manage pages from the web browser 
+* Download, upload, create, edit, manage pages from the web browser
 * etc.
 
 ## Capybara
