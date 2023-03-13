@@ -41,7 +41,7 @@ This is the V2 of the concept[^1]. Wish list for future versions:
 * Better caching
 * Easy deploy on clouds
 * storeos download/upload commands that know how to resume broken operations
-* File/page hierarchy (/page/subpage/subsubpage/...) to allow expansion & updates
+* Explicit file/page hierarchy support (partial with symlinks & dot file names)
 * Web3 login allows you to manage your own pages
 * Support multiple/all Antelope chains out-of-the-box
 * Detect new content on chain and download automaticaly
