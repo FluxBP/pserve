@@ -129,6 +129,7 @@ function serve_debug(rootdir, req, res) {
 // /_nodes allows browsing of the node cache for each page/file 
 app.use('/_nodes', serveIndex(path.join(__dirname, 'nodes'),
 			{'icons': true,
+			 'hidden': true,
 			 'template': 'nodestemplate.html'
 			}
 ));
@@ -140,6 +141,7 @@ app.get('/_nodes/:pagename/:filename', function (req, res) {
 // /_pages allows debugging pages directories without viewing page content 
 app.use('/_pages', serveIndex(path.join(__dirname, 'pages'),
 			{'icons': true,
+			 'hidden': true,
 			 'template': 'pagestemplate.html'
 			}
 ));
@@ -151,6 +153,7 @@ app.get('/_pages/:pagename/:filename', function (req, res) {
 // When no index.html or specific file, display directory
 app.use('/', serveIndex(path.join(__dirname, 'pages'),
 			{'icons': true,
+			 'hidden': true,
 			 'template': 'template.html'
 			}
 ));
