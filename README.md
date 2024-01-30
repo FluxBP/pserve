@@ -4,8 +4,6 @@ PermaServe is a sample Node application that retrieves, unpacks and serves conte
 
 PermaServe can serve static websites that are stored as Brotli-compressed tar archives on a PermaStore contract. It cannot deal with any other kind of binary PermaStore file.
 
-You can check out a running instance of PermaServe at [brocli.nfshost.com](https://brocli.nfshost.com).
-
 ## Running PermaServe
 
 ```
