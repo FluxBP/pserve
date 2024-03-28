@@ -25,9 +25,9 @@ The example below uses the `myaccountnam` blockchain account to upload the entir
 storeos 'websiteupload("myaccountnam", "pagename", "mylocal/directory");'
 ```
 
-## Connecting PermaServe to other Antelope blockchains
+## Connecting PermaServe to a specific Antelope blockchain
 
-The default PermaServe implementation points to the PermaStore contract [permastoreux](https://explorer.uxnetwork.io/account/permastoreux) on the [UX Network](https://uxnetwork.io), and uses the blockchain API node https://api.uxnetwork.io. If you are going to use another blockchain and/or another PermaStore contract deployment, you have to edit pretty much all of the source files. Search for `permastoreux`, `api.uxnetwork.io`, and `UX Network` across the project and change them to what you need.
+You have to edit the source files to point the code to the specific running blockchain that you are going to use. Search for `permastoreux`, `api.uxnetwork.io`, and `UX Network` across the project and change them to what you need.
 
 ## Future work
 
